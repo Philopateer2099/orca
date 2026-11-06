@@ -212,7 +212,7 @@ export function getExperimentalSearchEntry(t: Translate = translate) {
       t('auto.components.settings.experimental.search.agentHibernation.title', 'Agent sleep')
     ),
     newWorktreeCardStyle: findEntry(
-      t('auto.components.settings.experimental.search.newWorktreeCardStyle.title', 'New card style')
+      t('auto.components.settings.experimental.search.worktreeCardStyle.title', 'Card style')
     ),
     ephemeralVms: findEntry(
       t('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM')
