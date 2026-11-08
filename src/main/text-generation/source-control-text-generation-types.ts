@@ -50,6 +50,7 @@ export type TextGenerationOperation =
   | 'branch-name'
   | 'jira-issue-summary'
   | 'conversation-name'
+  | 'worktree-icon'
 
 export type CommitMessageGenerationTarget =
   | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
