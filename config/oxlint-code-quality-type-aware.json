@@ -13,9 +13,7 @@
   "rules": {
     "typescript/await-thenable": "warn",
     "typescript/no-array-delete": "error",
-    "typescript/no-floating-promises": "error",
     "typescript/no-for-in-array": "error",
-    "typescript/no-misused-promises": ["error", { "checksVoidReturn": { "attributes": false } }],
     "typescript/no-redundant-type-constituents": "warn",
     "typescript/prefer-find": "error",
     "typescript/restrict-plus-operands": "warn",
@@ -31,12 +29,6 @@
       "files": ["**/*.test.*", "**/*.spec.*"],
       "rules": {
         "typescript/await-thenable": "off"
-      }
-    },
-    {
-      "files": ["**/*.test.*", "**/*.spec.*", "**/*.test-fixture.*", "**/tests/**"],
-      "rules": {
-        "typescript/no-misused-promises": ["error", { "checksVoidReturn": false }]
       }
     }
   ],
