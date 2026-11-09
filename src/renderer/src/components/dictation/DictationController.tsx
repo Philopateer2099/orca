@@ -30,6 +30,7 @@ import {
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 import { publishDictationMeter } from './dictation-meter-store'
 import { useDictationSilenceStop } from './use-dictation-silence-stop'
+import { stopAfterSilenceSeconds } from '../../../../shared/dictation-silence-stop'
 import { useDictationSpeechEvents } from './use-dictation-speech-events'
 import { NO_DICTATION_LIVE_TEXT } from '@/store/slices/dictation/dictation'
 import {
@@ -367,6 +368,7 @@ export function DictationController() {
   useDictationSilenceStop(
     dictationState === 'listening',
     settings?.voice?.dictationMode,
+    stopAfterSilenceSeconds(settings?.voice),
     getLastSpeechAt,
     () => void stopDictation()
   )

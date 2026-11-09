@@ -16750,7 +16750,6 @@
           "micFallback": "所選麥克風不可用。使用系統預設值。",
           "micDisconnected": "麥克風已中斷連線。聽寫已停止。",
           "cloudLimitReached": "已達 10 分鐘雲端上限。聽寫已停止。",
-          "stoppedAfterSilence": "靜音一分鐘後已停止",
           "retryUnmatched": "重試時無法判斷哪些字詞已輸入，因此已全部插入。"
         },
         "dictation-transcript-delivery": {
@@ -20449,6 +20448,11 @@
           "repoNameHint": "將儲存庫名稱用作提示",
           "repoNameHintDescription": "幫助辨識儲存庫名稱。",
           "repoSaveFailed": "無法儲存儲存庫的術語。執行此儲存庫的主機可能需要更新 Orca。"
+        },
+        "silenceStop": {
+          "title": "靜音後停止",
+          "description": "安靜這麼久後停止聽寫。按住快捷鍵時從不停止。",
+          "off": "關閉"
         }
       },
       "repositoryHooks": {
@@ -20615,6 +20619,9 @@
           "action": "分割窗格"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "靜音 {{seconds}} 秒後已停止"
     }
   },
   "dashboardPopout": {

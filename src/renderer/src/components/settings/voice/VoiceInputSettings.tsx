@@ -15,6 +15,7 @@ import {
   SettingsSubsectionHeader
 } from '../form-controls/SettingsFormControls'
 import { VoiceMicrophoneSetting } from './VoiceMicrophoneSetting'
+import { VoiceSilenceStopSetting } from './VoiceSilenceStopSetting'
 
 export const VOICE_MICROPHONE_ROW_ID = 'voice-microphone'
 
@@ -90,6 +91,10 @@ export function VoiceInputSettings({
             onUpdateVoiceSettings={onUpdateVoiceSettings}
           />
         </div>
+        <VoiceSilenceStopSetting
+          voiceSettings={voiceSettings}
+          onUpdateVoiceSettings={onUpdateVoiceSettings}
+        />
       </div>
     </div>
   )

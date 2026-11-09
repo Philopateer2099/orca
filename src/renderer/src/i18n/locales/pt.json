@@ -19238,7 +19238,6 @@
           "micFallback": "O microfone selecionado não está disponível. Usando o padrão do sistema.",
           "micDisconnected": "Microfone desconectado. O ditado foi interrompido.",
           "cloudLimitReached": "O ditado foi interrompido no limite de 10 minutos da nuvem.",
-          "stoppedAfterSilence": "Parou após um minuto de silêncio",
           "retryUnmatched": "Ao tentar de novo, não foi possível saber quais palavras já estavam digitadas, então todas foram inseridas."
         },
         "dictation-transcript-delivery": {
@@ -21736,6 +21735,11 @@
           "repoNameHint": "Usar o nome do repositório como dica",
           "repoNameHintDescription": "Ajuda a reconhecer o nome do repositório.",
           "repoSaveFailed": "Não foi possível salvar os termos do repositório. O host deste repositório pode precisar de uma atualização do Orca."
+        },
+        "silenceStop": {
+          "title": "Parar após silêncio",
+          "description": "Para de ouvir depois desse tempo em silêncio. Nunca enquanto você segura o atalho.",
+          "off": "Desativado"
         }
       },
       "repositoryHooks": {
@@ -21907,6 +21911,9 @@
           "action": "Dividir painel"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "Parado após {{seconds}} segundos de silêncio"
     }
   },
   "csv": {

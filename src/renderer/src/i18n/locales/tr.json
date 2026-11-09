@@ -16961,7 +16961,6 @@
           "micFallback": "Seçili mikrofon kullanılamıyor. Sistem varsayılanı kullanılıyor.",
           "micDisconnected": "Mikrofon bağlantısı kesildi. Dikte durduruldu.",
           "cloudLimitReached": "Dikte, 10 dakikalık bulut sınırında durduruldu.",
-          "stoppedAfterSilence": "Bir dakika sessizlikten sonra durduruldu",
           "retryUnmatched": "Yeniden deneme hangi kelimelerin zaten yazıldığını anlayamadı, bu yüzden hepsini ekledi."
         },
         "dictation-transcript-delivery": {
@@ -20748,6 +20747,11 @@
           "repoNameHint": "Depo adını ipucu olarak kullan",
           "repoNameHintDescription": "Depo adının tanınmasına yardımcı olur.",
           "repoSaveFailed": "Deponun terimleri kaydedilemedi. Bu deponun ana makinesinde Orca güncellemesi gerekebilir."
+        },
+        "silenceStop": {
+          "title": "Sessizlikten sonra durdur",
+          "description": "Bu kadar süre sessiz kaldığınızda dinlemeyi bırakır. Kısayolu basılı tuttuğunuz sürece asla.",
+          "off": "Kapalı"
         }
       },
       "repositoryHooks": {
@@ -20914,6 +20918,9 @@
           "action": "Bölmeyi böl"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "{{seconds}} saniyelik sessizlikten sonra durduruldu"
     }
   },
   "dashboardPopout": {

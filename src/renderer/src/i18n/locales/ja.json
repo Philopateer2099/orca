@@ -16283,7 +16283,6 @@
           "micFallback": "選択したマイクが使用できません。システムのデフォルトを使用します。",
           "micDisconnected": "マイクが接続されていません。ディクテーションが停止しました。",
           "cloudLimitReached": "クラウドの10分の上限に達したため、ディクテーションが停止しました。",
-          "stoppedAfterSilence": "1分間音声がなかったため停止しました。",
           "retryUnmatched": "再試行で入力済みの語句を特定できなかったため、すべて挿入しました。"
         },
         "dictation-transcript-delivery": {
@@ -20047,6 +20046,11 @@
           "repoNameHint": "リポジトリ名をヒントとして使う",
           "repoNameHintDescription": "リポジトリ名を認識しやすくします。",
           "repoSaveFailed": "リポジトリの用語を保存できませんでした。このリポジトリのホストで Orca の更新が必要かもしれません。"
+        },
+        "silenceStop": {
+          "title": "無音で停止",
+          "description": "この時間だけ無音が続くと聞き取りを止めます。ショートカットを押している間は止めません。",
+          "off": "オフ"
         }
       },
       "repositoryHooks": {
@@ -20218,6 +20222,9 @@
           "action": "ペインを分割"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "{{seconds}} 秒間無音だったため停止しました"
     }
   },
   "dashboardPopout": {
