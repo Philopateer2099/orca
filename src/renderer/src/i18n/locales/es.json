@@ -4596,7 +4596,7 @@
             "notRead": "Uso desconocido: aún no consultado"
           },
           "InlineUsageBars": {
-            "resetsAt": "Se restablece a las {{when}}"
+            "resetsAt": "Se restablece: {{when}}"
           }
         }
       },
@@ -10876,9 +10876,9 @@
               "dictationLanguageTitle": "Idioma de dictado",
               "dictationLanguageDescription": "Indica al modelo de voz qué idioma hablas.",
               "dictationLanguageKeyword": "idioma",
-              "modelUnloadTitle": "Descargar modelo de voz",
-              "modelUnloadDescription": "Elige cuándo se descarga de la memoria el modelo de voz local.",
-              "modelUnloadKeyword": "descargar",
+              "modelUnloadTitle": "Liberar modelo de voz de la memoria",
+              "modelUnloadDescription": "Elige cuándo se libera de la memoria el modelo de voz local.",
+              "modelUnloadKeyword": "liberar memoria",
               "modelMemoryKeyword": "memoria",
               "fillerWordsTitle": "Quitar muletillas",
               "fillerWordsDescription": "Quita «ehm», «em» y sonidos parecidos del texto dictado.",
@@ -20472,7 +20472,7 @@
           "auto": "Detectar automáticamente"
         },
         "modelUnload": {
-          "title": "Descargar modelo de voz",
+          "title": "Liberar modelo de voz de la memoria",
           "description": "Cuánto tiempo permanece el modelo local en memoria después de dictar. Mientras está cargado, el dictado empieza al instante; «Inmediatamente» libera la memoria, así que cada dictado espera a que el modelo se cargue.",
           "cloud": "Los modelos en la nube se ejecutan en los servidores del proveedor, así que aquí no queda nada cargado.",
           "never": "Nunca",
@@ -23429,7 +23429,7 @@
     "catalogInstall": "Instala {{agent}} en este equipo para cargar sus modelos y vuelve a abrir el selector de agentes.",
     "catalogUnresolved": "Los modelos de {{agent}} no se han cargado. Cierra y vuelve a abrir el selector de agentes para intentarlo de nuevo.",
     "catalogEmpty": "{{agent}} no tiene modelos disponibles.",
-    "search": "Buscar agentes y configuraciones…",
+    "search": "Buscar, p. ej., Opus 5.5…",
     "configure": "Configurar {{agent}}",
     "arguments": "Argumentos",
     "argumentsHint": "Solo se aplica a los inicios de CLI.",
@@ -24015,7 +24015,7 @@
     "unsupportedDescription": "Apple no admite macOS {{macos}} en este Mac.",
     "unknownDescription": "No pudimos confirmar si este Mac puede actualizarse. La guía de compatibilidad de Apple puede ayudarte.",
     "whyTitle": "¿Por qué cambia esto?",
-    "whyIntro": "Hemos actualizado Electron, la base de Orca, para ofrecer:",
+    "whyIntro": "Hemos actualizado partes de la base de Orca, como Electron y el motor de voz local, para ofrecer:",
     "whySecurity": "Correcciones de seguridad continuas de Electron y Chromium.",
     "whyPerformance": "Un inicio más rápido y llamadas más eficientes a las API nativas.",
     "whySystemApis": "Compatibilidad con las API actuales de notificaciones de macOS y el almacenamiento seguro en el llavero.",
