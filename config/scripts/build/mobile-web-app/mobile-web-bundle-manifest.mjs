@@ -105,6 +105,8 @@ export async function readDesktopVersion() {
 export async function writeMobileWebBundleTree({
   outDir,
   written,
+  // Host-only: listed outside `assets`, so phones never download them and buildId ignores them.
+  catalogs = [],
   desktopVersion,
   protocolWindow,
   // Empty route list makes shell render every screen natively.
@@ -124,14 +126,27 @@ export async function writeMobileWebBundleTree({
     entrypoint: MOBILE_WEB_BUNDLE_ENTRYPOINT,
     totalBytes: assets.reduce((total, asset) => total + asset.byteLength, 0),
     assets,
-    routes
+    routes,
+    ...(catalogs.length === 0
+      ? {}
+      : {
+          catalogs: catalogs.map(({ locale, path, sha256, byteLength }) => ({
+            locale,
+            path,
+            sha256,
+            byteLength
+          }))
+        })
   }
 
   // Clear entire output or stale unreferenced assets ship inside asar.
   await rm(outDir, { recursive: true, force: true })
   await mkdir(join(outDir, 'assets'), { recursive: true })
-  for (const asset of written) {
-    await writeFile(join(outDir, asset.path), asset.bytes)
+  if (catalogs.length > 0) {
+    await mkdir(join(outDir, 'catalogs'), { recursive: true })
+  }
+  for (const file of [...written, ...catalogs]) {
+    await writeFile(join(outDir, file.path), file.bytes)
   }
   await writeFile(join(outDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
   // Keep switch metadata outside manifest so compiled page bytes/buildId remain unchanged.

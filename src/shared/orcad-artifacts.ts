@@ -189,7 +189,7 @@ export function isOrcadMobileWebAssetPath(path: string): boolean {
   )
 }
 
-/** Slot paths of every asset `manifestText` lists, sorted; throws rather than ship a partial page. */
+/** Slot paths of every asset and host-only catalog `manifestText` lists, sorted; throws rather than ship a partial page. */
 export function orcadMobileWebAssetFilenames(manifestText: string): string[] {
   const manifest: unknown = JSON.parse(manifestText)
   const assets =
@@ -197,7 +197,12 @@ export function orcadMobileWebAssetFilenames(manifestText: string): string[] {
   if (!Array.isArray(assets) || assets.length === 0) {
     throw new Error(`${ORCAD_MOBILE_WEB_MANIFEST} lists no assets`)
   }
-  const filenames = assets.map((asset: unknown) => {
+  const catalogs =
+    manifest && typeof manifest === 'object' && 'catalogs' in manifest ? manifest.catalogs : []
+  if (!Array.isArray(catalogs)) {
+    throw new Error(`${ORCAD_MOBILE_WEB_MANIFEST} catalogs is not a list`)
+  }
+  const filenames = [...assets, ...catalogs].map((asset: unknown) => {
     const path = asset && typeof asset === 'object' && 'path' in asset ? asset.path : undefined
     if (typeof path !== 'string' || !isOrcadMobileWebAssetPath(path)) {
       throw new Error(`${ORCAD_MOBILE_WEB_MANIFEST} names an unsafe asset path: ${String(path)}`)

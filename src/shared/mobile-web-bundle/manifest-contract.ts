@@ -4,8 +4,8 @@ import { sha256 } from '../sha256'
 /** A reader that sees another value must reject rather than guess at the shape. */
 export const MOBILE_WEB_BUNDLE_SCHEMA_VERSION = 1 as const
 
-/** Page build number: shells require their minimum and wall older desktops, and check it before using a newer page feature. 2: opens a shell's `open` target in-document. 3: also hands an `open` for the session on top its pane, and reports which session it shows. */
-export const MOBILE_WEB_PAGE_VERSION = 3
+/** Page build number: shells require their minimum and wall older desktops, and check it before using a newer page feature. 2: opens a shell's `open` target in-document. 3: also hands an `open` for the session on top its pane, and reports which session it shows. 4: reads its language catalog from the host (`mobileWeb.bundle.localeCatalog`) instead of carrying one per language. */
+export const MOBILE_WEB_PAGE_VERSION = 4
 
 /** The only stable-named asset, and the only one that references the content-addressed names. */
 export const MOBILE_WEB_BUNDLE_ENTRYPOINT = 'index.html'
@@ -18,6 +18,7 @@ export const MOBILE_WEB_BUNDLE_MAX_ROUTES = 64
 export const MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS = 16
 // What a route's two lists can grant together; released shells cap each list alone, never the pair.
 export const MOBILE_WEB_BUNDLE_MAX_GRANTED_ROUTE_GRANTS = 2 * MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS
+export const MOBILE_WEB_BUNDLE_MAX_CATALOGS = 32
 
 export const SHA256_PATTERN = /^[a-f0-9]{64}$/
 const ASSET_PATH_PATTERN = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/
@@ -29,6 +30,7 @@ const MAX_CONTENT_TYPE_LENGTH = 128
 const MAX_DESKTOP_VERSION_LENGTH = 64
 const MAX_ROUTE_PATHNAME_LENGTH = 255
 const MAX_GRANT_NAME_LENGTH = 64
+const UI_LOCALE_PATTERN = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/
 /** Rooted, single-slash, no query and no fragment: a phone writes this into its own history. */
 const ROUTE_PATHNAME_PATTERN = /^\/(?![/\\])[^?#\s]*$/
 /** Plain capabilities or shell verbs native.<domain>.<action>; require at least two native segments to match the shell table and keep verbs grantable per route. */
@@ -70,6 +72,20 @@ export const MobileWebBundleAssetSchema = z
   .strict()
 
 export type MobileWebBundleAsset = z.infer<typeof MobileWebBundleAssetSchema>
+
+export const MobileWebBundleCatalogLocaleSchema = z.string().max(32).regex(UI_LOCALE_PATTERN)
+
+/** A UI-language catalog the host serves on request; phones never download it with the build. */
+export const MobileWebBundleCatalogSchema = z
+  .object({
+    locale: MobileWebBundleCatalogLocaleSchema,
+    path: MobileWebBundleAssetPathSchema,
+    sha256: z.string().regex(SHA256_PATTERN),
+    byteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
+  })
+  .strict()
+
+export type MobileWebBundleCatalog = z.infer<typeof MobileWebBundleCatalogSchema>
 
 /** Code-unit order, not `localeCompare`: the sort feeds a content hash, so it must not vary. */
 function compareAssetPaths(left: MobileWebBundleAsset, right: MobileWebBundleAsset): number {
@@ -126,9 +142,19 @@ function validateManifestInvariants(
     minCompatibleRuntimeProtocolVersion: number
     runtimeProtocolVersion: number
     assets: readonly MobileWebBundleAsset[]
+    catalogs?: readonly MobileWebBundleCatalog[]
   },
   context: z.RefinementCtx
 ): void {
+  const catalogLocales = new Set(manifest.catalogs?.map((catalog) => catalog.locale))
+  if (catalogLocales.size !== (manifest.catalogs?.length ?? 0)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['catalogs'],
+      message: 'catalogs must name each locale once'
+    })
+    return
+  }
   // Return on cheap failures before hashing; zod refines even after the asset-count ceiling fails.
   if (manifest.assets.length > MOBILE_WEB_BUNDLE_MAX_ASSETS) {
     return
@@ -210,7 +236,9 @@ export const MobileWebBundleManifestSchema = z
     totalBytes: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES),
     assets: z.array(MobileWebBundleAssetSchema).min(1).max(MOBILE_WEB_BUNDLE_MAX_ASSETS),
     /** Outside buildId’s asset hash; routes derive from the same source tree as the script, so identical assets imply identical routes. */
-    routes: z.array(MobileWebBundleRouteSchema).max(MOBILE_WEB_BUNDLE_MAX_ROUTES)
+    routes: z.array(MobileWebBundleRouteSchema).max(MOBILE_WEB_BUNDLE_MAX_ROUTES),
+    /** Host-only files outside `assets` and buildId; absent from desktops that ship catalogs as page chunks. */
+    catalogs: z.array(MobileWebBundleCatalogSchema).max(MOBILE_WEB_BUNDLE_MAX_CATALOGS).optional()
   })
   .strict()
   .superRefine(validateManifestInvariants)

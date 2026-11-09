@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { readRouteSnapshot } from '../../mobile-web-app/mobile-web-app-route-snapshot.mjs'
 import { MOBILE_WEB_APP_DEPENDENCY_PATH } from '../../mobile-web-app/mobile-web-app-bundle-dependencies.mjs'
 import { existsSync, realpathSync } from 'node:fs'
@@ -478,26 +478,47 @@ export async function mobileWebAppModuleClosure(entryModules, { absWorkingDir } 
   }
 }
 
-// One lazily imported chunk per UI language; the page fetches only the active one after init.
+// The host serves UI-language catalogs on request (`catalogs` in the manifest); a page chunk carrying one would ship it in every update.
 const LOCALE_CATALOG_INPUT = /(^|\/)src\/i18n\/locales\/[^/]+\.json$/
+const localeCatalogDir = join(mobileDir, 'src', 'i18n', 'locales')
 
-function localeCatalogOutputs(metafile) {
-  return new Set(
-    Object.entries(metafile.outputs)
-      .filter(([, output]) => {
-        const inputs = Object.keys(output.inputs ?? {})
-        return inputs.length > 0 && inputs.every((input) => LOCALE_CATALOG_INPUT.test(input))
-      })
-      .map(([output]) => basename(output))
+function assertNoLocaleCatalogsInPage(metafile) {
+  const leaked = Object.values(metafile.outputs).flatMap(({ inputs }) =>
+    Object.keys(inputs).filter((input) => LOCALE_CATALOG_INPUT.test(input))
+  )
+  if (leaked.length > 0) {
+    throw new Error(
+      `[build-mobile-web-app-bundle] ${leaked[0]} reached the page; ` +
+        'the page reads catalogs from the host through locale-catalog-imports.web.ts'
+    )
+  }
+}
+
+// English is the page's inline fallback, so only the other languages become catalogs.
+export async function readLocaleCatalogs(directory = localeCatalogDir) {
+  const names = (await readdir(directory))
+    .filter((name) => name.endsWith('.json') && name !== 'en.json')
+    .sort()
+  return Promise.all(
+    names.map(async (name) => {
+      // Minify: what the host sends and the phone caches is the parsed object, not the source layout.
+      const parsed = JSON.parse(await readFile(join(directory, name), 'utf8'))
+      const bytes = Buffer.from(JSON.stringify(parsed), 'utf8')
+      const sha256 = sha256Hex(bytes)
+      return {
+        locale: name.slice(0, -'.json'.length),
+        bytes,
+        path: `catalogs/${sha256}.json`,
+        sha256,
+        byteLength: bytes.byteLength
+      }
+    })
   )
 }
 
-// The entry and its chunks, without locale catalogs: what the chunk fence and its sweep table count.
+// The entry and its chunks: what the chunk fence and its sweep table count.
 export function pageScriptCount(metafile) {
-  const catalogs = localeCatalogOutputs(metafile)
-  return Object.keys(metafile.outputs).filter(
-    (output) => isScriptOutput(output) && !catalogs.has(basename(output))
-  ).length
+  return Object.keys(metafile.outputs).filter(isScriptOutput).length
 }
 
 // esbuild keeps a whole namespace used as a value: `import { z }` or `z.core` ships ~200 KB of zod locale tables.
@@ -543,6 +564,7 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   await assertRoutesCarryNoSynchronousExports(routes)
   const result = await buildMobileWebAppScripts(routes)
   assertNoZodLocaleTables(result.metafile)
+  assertNoLocaleCatalogsInPage(result.metafile)
   const entryOutputPath = entryOutput(result.metafile)
   const renamed = renameOutputsByContent(result.metafile, result.outputFiles)
   const entry = renamed.get(basename(entryOutputPath))
@@ -555,12 +577,10 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const chunks = others.filter(({ emittedName }) => isScriptOutput(emittedName)).sort(byName)
   const images = others.filter(({ emittedName }) => !isScriptOutput(emittedName)).sort(byName)
   const closure = entryStaticClosure(result.metafile, entryOutputPath)
-  const catalogOutputs = localeCatalogOutputs(result.metafile)
   return {
     script: entry.bytes,
     chunks,
     images,
-    catalogChunks: chunks.filter(({ emittedName }) => catalogOutputs.has(emittedName)),
     // Count final renamed bytes; metafile sizes predate longer hashes but still identify static imports.
     entryStaticBytes: [...closure].reduce(
       (total, path) => total + (renamed.get(basename(path))?.bytes.byteLength ?? 0),
@@ -604,12 +624,14 @@ export async function buildMobileWebAppBundle({
   const [
     desktopVersion,
     protocolWindow,
-    { script, chunks, images, catalogChunks, entryStaticBytes, chunkCount, routeChunks, routeKeys },
+    { script, chunks, images, entryStaticBytes, chunkCount, routeChunks, routeKeys },
+    catalogs,
     scrollbarStyle
   ] = await Promise.all([
     readDesktopVersion(),
     readProtocolWindow(),
     bundleMobileWebApp({ appDir }),
+    readLocaleCatalogs(),
     readFile(join(projectDir, 'src/shared/styles/scrollbar-sleek.css'), 'utf8').then((style) =>
       // The shared desktop stylesheet can be checked out as CRLF on Windows.
       style.replace(/\r\n/g, '\n')
@@ -643,6 +665,7 @@ export async function buildMobileWebAppBundle({
   const { manifest } = await writeMobileWebBundleTree({
     outDir,
     written: [indexAsset, ...written],
+    catalogs,
     desktopVersion,
     protocolWindow,
     routes: resolveMobileWebPageRoutes(routeKeys, pageRoutes)
@@ -655,9 +678,7 @@ export async function buildMobileWebAppBundle({
     entryStaticBytes,
     chunkCount,
     // Everything the routes import that is not a script, which is the rest of the asset budget.
-    imageCount: images.length,
-    catalogChunkCount: catalogChunks.length,
-    catalogBytes: catalogChunks.reduce((total, { bytes }) => total + bytes.byteLength, 0)
+    imageCount: images.length
   }
 }
 

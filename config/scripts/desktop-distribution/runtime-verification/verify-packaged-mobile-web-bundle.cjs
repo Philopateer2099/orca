@@ -99,6 +99,19 @@ function parseManifest(bundleDir) {
       throw failure(`manifest asset ${asset.path} has no contentType`)
     }
   }
+  if (manifest.catalogs !== undefined && !Array.isArray(manifest.catalogs)) {
+    throw failure('manifest catalogs is not a list')
+  }
+  for (const catalog of manifest.catalogs ?? []) {
+    if (typeof catalog !== 'object' || catalog === null || typeof catalog.locale !== 'string') {
+      throw failure('manifest catalog entry has no locale')
+    }
+    assertSafeRelativePath(catalog.path)
+    if (typeof catalog.sha256 !== 'string' || !SHA256_PATTERN.test(catalog.sha256)) {
+      throw failure(`manifest catalog ${catalog.path} has no sha256 digest`)
+    }
+    assertInteger(catalog.byteLength, `catalogs[${catalog.path}].byteLength`)
+  }
   if (!manifest.assets.some((asset) => asset.path === manifest.entrypoint)) {
     throw failure(`manifest entrypoint ${manifest.entrypoint} is not one of its assets`)
   }
@@ -117,6 +130,11 @@ function parseManifest(bundleDir) {
     )
   }
   return manifest
+}
+
+// Assets go to the phone; catalogs stay on the host, which serves one on request.
+function servedFiles(manifest) {
+  return [...manifest.assets, ...(manifest.catalogs ?? [])]
 }
 
 function listBundleFiles(directory, prefix = '') {
@@ -138,7 +156,7 @@ function assertNoUnlistedFiles(bundleDir, manifest) {
   const listed = new Set([
     'manifest.json',
     ...darkBuildMarkerFileNames(),
-    ...manifest.assets.map((asset) => asset.path)
+    ...servedFiles(manifest).map((file) => file.path)
   ])
   const strays = listBundleFiles(bundleDir).filter((path) => !listed.has(path))
   if (strays.length > 0) {
@@ -153,7 +171,7 @@ function assertNoUnlistedFiles(bundleDir, manifest) {
 function assertMobileWebBundleBuilt(bundleDir = MOBILE_WEB_BUNDLE_DIR) {
   const manifest = parseManifest(bundleDir)
   assertNoUnlistedFiles(bundleDir, manifest)
-  for (const asset of manifest.assets) {
+  for (const asset of servedFiles(manifest)) {
     const assetPath = join(bundleDir, asset.path)
     let size
     try {

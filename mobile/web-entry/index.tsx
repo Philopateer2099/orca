@@ -33,6 +33,7 @@ import { PageFaultBoundary } from '../src/mobile-web-shell/bridge/page-fault-bou
 import type { BridgeUiLocale } from '../src/mobile-web-shell/bridge/bridge-envelope'
 import { BRIDGE_OPEN_ROUTE_PARAM } from '../src/mobile-web-shell/bridge/bridge-route-update'
 import { activateMobileUiLocale, subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
+import { publishPageLocaleCatalogSource } from '../src/i18n/locale-catalog-imports.web'
 import { getUiIntlLocale } from '../src/i18n/ui-intl-locale'
 import { readDeviceUiLocaleTags, resolveUiLocaleFromTags } from '../src/i18n/system-ui-locale'
 import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-host-profile'
@@ -158,6 +159,10 @@ bootstrapShellPage({
     // Apply before the first render so no component paints the default dark palette first.
     applyMobileColorScheme(session.colorScheme)
     client.onColorSchemeUpdate(applyMobileColorScheme)
+    const deviceStore = createPageDeviceStore(client)
+    publishPageDeviceStore(deviceStore)
+    // Catalogs come from the desktop and the device store, so publish both before the first load.
+    publishPageLocaleCatalogSource({ client, store: deviceStore })
     // Subscribe before the first catalog load so a switch during startup is not lost; the latest request wins.
     let uiLocaleActivation = activatePageUiLocale(session.uiLocale)
     client.onUiLocaleUpdate((locale) => {
@@ -187,8 +192,6 @@ bootstrapShellPage({
             ).value
         : null
     )
-    const deviceStore = createPageDeviceStore(client)
-    publishPageDeviceStore(deviceStore)
     // An open-target boot paints the shell's target first, so that is the screen to preload and restore.
     const route = bootRoute(session.route?.params?.[BRIDGE_OPEN_ROUTE_PARAM])
     const queryClient = createOrcaQueryClient()

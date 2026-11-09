@@ -21,3 +21,8 @@ export function importLocaleCatalog(
 ): Promise<LocaleCatalog> {
   return CATALOG_IMPORTS[locale]()
 }
+
+// Bundled catalogs never change after their import, so none arrives later; the page build's .web.ts does.
+export const onLocaleCatalogArrival: (
+  listener: (locale: Exclude<SupportedUiLocale, 'en'>, catalog: LocaleCatalog) => void
+) => () => void = () => () => undefined

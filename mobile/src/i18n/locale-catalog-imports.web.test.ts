@@ -1,0 +1,128 @@
+import { describe, expect, it, vi } from 'vitest'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
+import { encodeDeviceStoreValue } from '../device-store/device-store-value-codec'
+import type { PageDeviceStore } from '../mobile-web-shell/bridge/page-device-store'
+
+// The page build resolves mobile-i18n's catalog import to the .web module; mirror that here.
+vi.mock('./locale-catalog-imports', () => import('./locale-catalog-imports.web'))
+
+const OLD_SHA = 'a'.repeat(64)
+const NEW_SHA = 'b'.repeat(64)
+
+type SentRequest = { method: string; params: unknown; reply: (response: RpcResponse) => void }
+
+function fakeClient(initial: ConnectionState) {
+  let state = initial
+  const listeners = new Set<(next: ConnectionState) => void>()
+  const sent: SentRequest[] = []
+  return {
+    sent,
+    getState: () => state,
+    onStateChange: (listener: (next: ConnectionState) => void) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+    sendRequest: (method: string, params?: unknown) =>
+      new Promise<RpcResponse>((reply) => sent.push({ method, params, reply })),
+    moveTo(next: ConnectionState) {
+      state = next
+      for (const listener of listeners) {
+        listener(next)
+      }
+    }
+  }
+}
+
+function fakeStore(rows: Record<string, string>): PageDeviceStore & { rows: Map<string, string> } {
+  const stored = new Map(Object.entries(rows))
+  return {
+    rows: stored,
+    available: () => true,
+    read: async (_table, keys) => ({
+      status: 'ok',
+      values: keys.map((key) => stored.get(key) ?? null)
+    }),
+    write: async (_table, ops) => {
+      for (const op of ops) {
+        if (op.value !== null) {
+          stored.set(op.key, op.value)
+        }
+      }
+      return { written: true }
+    }
+  }
+}
+
+const { publishPageLocaleCatalogSource } = await import('./locale-catalog-imports.web')
+const i18n = await import('./mobile-i18n')
+
+// Module state outlives a test, so each test uses its own locale and publishes its own source.
+function openPage(client: ReturnType<typeof fakeClient>, store: PageDeviceStore): void {
+  publishPageLocaleCatalogSource({ client, store })
+}
+
+async function settle(): Promise<void> {
+  for (let turn = 0; turn < 20; turn++) {
+    await Promise.resolve()
+  }
+}
+
+describe('the page language catalog', () => {
+  it('opens on the stored copy, then switches in place to the desktop newer one', async () => {
+    const client = fakeClient('connected')
+    const store = fakeStore({
+      'i18n-catalog:de': encodeDeviceStoreValue({
+        v: 1,
+        sha256: OLD_SHA,
+        catalog: { greeting: 'Hallo' }
+      })
+    })
+    openPage(client, store)
+
+    await i18n.activateMobileUiLocale('de')
+    expect(i18n.translate('greeting', 'Hello')).toBe('Hallo')
+    expect(client.sent.map(({ method, params }) => ({ method, params }))).toEqual([
+      { method: 'mobileWeb.bundle.localeCatalog', params: { locale: 'de', knownSha256: OLD_SHA } }
+    ])
+
+    client.sent[0].reply({
+      id: 'r1',
+      ok: true,
+      result: { locale: 'de', sha256: NEW_SHA, catalog: { greeting: 'Servus' } }
+    })
+    await settle()
+
+    expect(i18n.getMobileUiLocale()).toBe('de')
+    expect(i18n.translate('greeting', 'Hello')).toBe('Servus')
+    expect(store.rows.get('i18n-catalog:de')).toBe(
+      encodeDeviceStoreValue({ v: 1, sha256: NEW_SHA, catalog: { greeting: 'Servus' } })
+    )
+  })
+
+  it('shows English offline with nothing stored, then the language once the desktop answers', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const client = fakeClient('reconnecting')
+    openPage(client, fakeStore({}))
+
+    await i18n.activateMobileUiLocale('fr')
+    expect(i18n.getMobileUiLocale()).toBe('en')
+    expect(i18n.translate('greeting', 'Hello')).toBe('Hello')
+    expect(client.sent).toHaveLength(0)
+
+    client.moveTo('connected')
+    await settle()
+    expect(client.sent.map(({ params }) => params)).toEqual([{ locale: 'fr' }])
+    client.sent[0].reply({
+      id: 'r1',
+      ok: true,
+      result: { locale: 'fr', sha256: NEW_SHA, catalog: { greeting: 'Bonjour' } }
+    })
+    await settle()
+
+    expect(i18n.getMobileUiLocale()).toBe('fr')
+    expect(i18n.translate('greeting', 'Hello')).toBe('Bonjour')
+  })
+})
