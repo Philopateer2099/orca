@@ -2,7 +2,7 @@ import type { SupportedUiLocale } from '../../../src/shared/ui-locale'
 
 export type LocaleCatalog = Readonly<Record<string, unknown>>
 
-// Literal specifiers: Metro evaluates only the chosen module, and the page build splits each into its own chunk.
+// Literal specifiers: Metro evaluates only the chosen module.
 const CATALOG_IMPORTS: Record<Exclude<SupportedUiLocale, 'en'>, () => Promise<LocaleCatalog>> = {
   de: () => import('./locales/de.json').then((module) => module.default),
   es: () => import('./locales/es.json').then((module) => module.default),

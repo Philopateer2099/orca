@@ -60,12 +60,13 @@ export function writeSyntheticMobileWebBundle(
   localeCatalogs: Readonly<Record<string, Record<string, unknown>>> = {}
 ): SyntheticMobileWebBundle {
   mkdirSync(join(root, 'assets'), { recursive: true })
-  mkdirSync(join(root, 'catalogs'), { recursive: true })
   const catalogs = Object.entries(localeCatalogs).map(([locale, catalog]) => {
     const bytes = Buffer.from(JSON.stringify(catalog), 'utf8')
-    const path = `catalogs/${sha256Hex(bytes)}.json`
+    const sha256 = sha256Hex(bytes)
+    const path = `catalogs/${sha256}.json`
+    mkdirSync(join(root, 'catalogs'), { recursive: true })
     writeFileSync(join(root, path), bytes)
-    return { locale, path, sha256: sha256Hex(bytes), byteLength: bytes.byteLength }
+    return { locale, path, sha256, byteLength: bytes.byteLength }
   })
   const written = [...syntheticAssets(seed), ...extraAssets]
   for (const asset of written) {

@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
-import { encodeDeviceStoreValue } from '../device-store/device-store-value-codec'
+import {
+  decodeDeviceStoreValue,
+  encodeDeviceStoreValue
+} from '../device-store/device-store-value-codec'
 import type { PageDeviceStore } from '../mobile-web-shell/bridge/page-device-store'
 
 // The page build resolves mobile-i18n's catalog import to the .web module; mirror that here.
@@ -78,10 +81,12 @@ function openPage(client: ReturnType<typeof fakeClient>, store: PageDeviceStore)
   publishPageLocaleCatalogSource({ client, store })
 }
 
+// Microtasks, then one macrotask, which is when the store write runs.
 async function settle(): Promise<void> {
   for (let turn = 0; turn < 20; turn++) {
     await Promise.resolve()
   }
+  await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 describe('the page language catalog', () => {
@@ -111,9 +116,11 @@ describe('the page language catalog', () => {
 
     expect(i18n.getMobileUiLocale()).toBe('de')
     expect(i18n.translate('greeting', 'Hello')).toBe('Servus')
-    expect(store.rows.get('i18n-catalog:de')).toBe(
-      encodeDeviceStoreValue({ v: 1, sha256: NEW_SHA, catalog: { greeting: 'Servus' } })
-    )
+    expect(decodeDeviceStoreValue(store.rows.get('i18n-catalog:de') ?? '')).toEqual({
+      v: 1,
+      sha256: NEW_SHA,
+      catalog: { greeting: 'Servus' }
+    })
   })
 
   it('shows English offline with nothing stored, then the language once the desktop answers', async () => {
