@@ -27,6 +27,10 @@ export const getActionDescriptions = createLocalizedCatalog((): Record<AiActionI
     'settings.chat.names.recipeDescription',
     'Generate a short name from the first message in a new chat.'
   ),
+  workspaceIcon: translate(
+    'settings.git.workspaceIcons.recipeDescription',
+    'Draw the AI-generated workspace card icons, many workspaces per call.'
+  ),
   commitMessage: translate(
     'auto.components.settings.source.control.action.recipe.options.commitMessage',
     'Generate the commit message from staged changes.'

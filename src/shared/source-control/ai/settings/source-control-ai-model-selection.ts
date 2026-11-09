@@ -1,3 +1,4 @@
+import { isGlobalOnlyAiTextAction } from '../recipes/source-control-ai-actions'
 import type {
   CommitMessageAiSettings,
   CommitMessageAiModelCapability
@@ -162,10 +163,12 @@ export function selectPersistedModelId(args: {
   hostKey: string
   agentId: TuiAgent
   defaultModelId: string
+  /** Outranks shared picks but not this operation's own pick. */
+  operationDefaultModelId?: string
 }): string {
   const { source, legacy, repoOverrides, operation, hostKey, agentId, defaultModelId } = args
   return (
-    (operation === 'conversationName'
+    (isGlobalOnlyAiTextAction(operation)
       ? undefined
       : readSourceControlAiModelChoiceForHost(
           repoOverrides?.modelOverridesByOperation?.[operation],
@@ -177,6 +180,7 @@ export function selectPersistedModelId(args: {
       hostKey,
       agentId
     ) ??
+    args.operationDefaultModelId ??
     readSourceControlAiModelChoiceForHost(
       {
         selectedModelByAgent: source.selectedModelByAgent,
@@ -204,7 +208,7 @@ export function resolveThinkingLevel(args: {
     return undefined
   }
   const persisted =
-    (args.operation === 'conversationName'
+    (isGlobalOnlyAiTextAction(args.operation)
       ? undefined
       : args.repoOverrides?.modelOverridesByOperation?.[args.operation]?.selectedThinkingByModel?.[
           args.model.id

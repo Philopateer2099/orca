@@ -4,6 +4,7 @@ import {
   type TextGenerationFailureCode
 } from '../../../shared/text-generation-failure-copy'
 import { AGENT_OUTPUT_ERROR_COPY } from './text-generation/agent-output-error-copy'
+import { TEXT_ACTION_RECIPE_ERROR_COPY } from './text-action-recipe-error-copy'
 
 type CopyValues = Record<string, string | number>
 
@@ -148,78 +149,6 @@ const COPY: Record<TextGenerationFailureCode, (values: CopyValues) => string> = 
     translate('sourceControl.textGeneration.errors.noStagedChanges', EN.noStagedChanges, values),
   noBranchChanges: (values) =>
     translate('sourceControl.textGeneration.errors.noBranchChanges', EN.noBranchChanges, values),
-  commandTemplateEmptyCommitMessage: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.commandTemplateEmptyCommitMessage',
-      EN.commandTemplateEmptyCommitMessage,
-      values
-    ),
-  commandTemplateEmptyPullRequest: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.commandTemplateEmptyPullRequest',
-      EN.commandTemplateEmptyPullRequest,
-      values
-    ),
-  commandTemplateEmptyBranchName: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.commandTemplateEmptyBranchName',
-      EN.commandTemplateEmptyBranchName,
-      values
-    ),
-  commandTemplateEmptyChatName: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.commandTemplateEmptyChatName',
-      EN.commandTemplateEmptyChatName,
-      values
-    ),
-  sourceControlAgentUnsupported: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.sourceControlAgentUnsupported',
-      EN.sourceControlAgentUnsupported,
-      values
-    ),
-  chatNameAgentUnsupported: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.chatNameAgentUnsupported',
-      EN.chatNameAgentUnsupported,
-      values
-    ),
-  sourceControlCustomCommandEmpty: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.sourceControlCustomCommandEmpty',
-      EN.sourceControlCustomCommandEmpty,
-      values
-    ),
-  chatNameCustomCommandEmpty: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.chatNameCustomCommandEmpty',
-      EN.chatNameCustomCommandEmpty,
-      values
-    ),
-  agentCannotGenerateCommitMessage: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.agentCannotGenerateCommitMessage',
-      EN.agentCannotGenerateCommitMessage,
-      values
-    ),
-  agentCannotGeneratePullRequest: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.agentCannotGeneratePullRequest',
-      EN.agentCannotGeneratePullRequest,
-      values
-    ),
-  agentCannotGenerateBranchName: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.agentCannotGenerateBranchName',
-      EN.agentCannotGenerateBranchName,
-      values
-    ),
-  agentCannotGenerateChatName: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.agentCannotGenerateChatName',
-      EN.agentCannotGenerateChatName,
-      values
-    ),
   noModelForAgent: (values) =>
     translate('sourceControl.textGeneration.errors.noModelForAgent', EN.noModelForAgent, values),
   planCustomCommandEmpty: (values) =>
@@ -252,6 +181,7 @@ const COPY: Record<TextGenerationFailureCode, (values: CopyValues) => string> = 
       EN.planThinkingLevelInvalid,
       values
     ),
+  ...TEXT_ACTION_RECIPE_ERROR_COPY,
   ...AGENT_OUTPUT_ERROR_COPY
 }
 

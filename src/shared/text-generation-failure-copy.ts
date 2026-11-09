@@ -40,6 +40,7 @@ export const TEXT_GENERATION_FAILURE_COPY = {
   commandTemplateEmptyPullRequest: 'Command template is empty for pull request details.',
   commandTemplateEmptyBranchName: 'Command template is empty for branch names.',
   commandTemplateEmptyChatName: 'Command template is empty for chat names.',
+  commandTemplateEmptyWorkspaceIcon: 'Command template is empty for workspace icons.',
   sourceControlAgentUnsupported:
     'Choose a supported Source Control AI agent for this action in Settings -> Git -> Source Control AI. Supported agents: {{agents}}, or Custom command.',
   chatNameAgentUnsupported:
@@ -55,6 +56,8 @@ export const TEXT_GENERATION_FAILURE_COPY = {
     'Agent "{{agent}}" does not support Source Control AI branch names. Supported agents: {{agents}}, or Custom command.',
   agentCannotGenerateChatName:
     'Agent "{{agent}}" does not support chat names. Supported agents: {{agents}}, or Custom command.',
+  agentCannotGenerateWorkspaceIcon:
+    'Agent "{{agent}}" does not support workspace icons. Supported agents: {{agents}}, or Custom command.',
   noModelForAgent: 'No model is available for {{label}}.',
   planCustomCommandEmpty:
     'Custom command is empty. Add one in Settings → Git → AI Commit Messages.',

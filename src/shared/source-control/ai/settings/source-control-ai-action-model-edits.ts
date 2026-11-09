@@ -1,3 +1,4 @@
+import { isGlobalOnlyAiTextAction } from '../recipes/source-control-ai-actions'
 import {
   saveSourceControlAiActionModelChoice,
   sourceControlAiModelChoiceHostKeys
@@ -68,7 +69,7 @@ export function replaySourceControlAiModelEdits(input: {
   }
   return input.target.type === 'global'
     ? settings.sourceControlAi?.modelOverridesByOperation?.[input.actionId]
-    : input.actionId === 'conversationName'
+    : isGlobalOnlyAiTextAction(input.actionId)
       ? undefined
       : repo?.sourceControlAi?.modelOverridesByOperation?.[input.actionId]
 }

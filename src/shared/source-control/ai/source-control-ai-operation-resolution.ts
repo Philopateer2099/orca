@@ -1,4 +1,10 @@
 import {
+  isGlobalOnlyAiTextAction,
+  WORKSPACE_ICON_DEFAULT_AGENT,
+  WORKSPACE_ICON_DEFAULT_MODEL
+} from './recipes/source-control-ai-actions'
+import { isTuiAgentEnabled } from '../../agent-launch/catalog/tui-agent-selection'
+import {
   CUSTOM_AGENT_ID,
   getCommitMessageAgentSpec,
   getCommitMessageModel,
@@ -86,14 +92,16 @@ const COMMAND_TEMPLATE_EMPTY = {
   commitMessage: 'commandTemplateEmptyCommitMessage',
   pullRequest: 'commandTemplateEmptyPullRequest',
   branchName: 'commandTemplateEmptyBranchName',
-  conversationName: 'commandTemplateEmptyChatName'
+  conversationName: 'commandTemplateEmptyChatName',
+  workspaceIcon: 'commandTemplateEmptyWorkspaceIcon'
 } as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
 
 const AGENT_CANNOT_GENERATE = {
   commitMessage: 'agentCannotGenerateCommitMessage',
   pullRequest: 'agentCannotGeneratePullRequest',
   branchName: 'agentCannotGenerateBranchName',
-  conversationName: 'agentCannotGenerateChatName'
+  conversationName: 'agentCannotGenerateChatName',
+  workspaceIcon: 'agentCannotGenerateWorkspaceIcon'
 } as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
 
 function supportedAgentLabels(): string {
@@ -113,10 +121,9 @@ export function resolveSourceControlAiForOperation(
 ): ResolveSourceControlAiResult {
   const legacy = input.settings.commitMessageAi
   const source = normalizeSettings(input.settings.sourceControlAi, legacy)
-  const repoOverrides =
-    input.operation === 'conversationName'
-      ? null
-      : normalizeRepoOverrides(input.repo?.sourceControlAi)
+  const repoOverrides = isGlobalOnlyAiTextAction(input.operation)
+    ? null
+    : normalizeRepoOverrides(input.repo?.sourceControlAi)
   const forChatNames = input.operation === 'conversationName'
   const agentUnsupported = (): { ok: false } & TextGenerationFailureFields =>
     resolveFailure(
@@ -134,7 +141,16 @@ export function resolveSourceControlAiForOperation(
   if (!actionRecipe.commandInputTemplate.trim()) {
     return resolveFailure(textGenerationFailure(COMMAND_TEMPLATE_EMPTY[input.operation]))
   }
-  const preferredAgent = hasActionAgentRecipe(actionRecipe) ? actionRecipe.agentId : source.agentId
+  // An unpicked icon agent means Orca's cheap default, not the user's general Source Control agent.
+  const iconDefault =
+    input.operation === 'workspaceIcon' &&
+    !actionRecipe.agentId &&
+    isTuiAgentEnabled(WORKSPACE_ICON_DEFAULT_AGENT, input.settings.disabledTuiAgents)
+  const preferredAgent = iconDefault
+    ? WORKSPACE_ICON_DEFAULT_AGENT
+    : hasActionAgentRecipe(actionRecipe)
+      ? actionRecipe.agentId
+      : source.agentId
   const agentChoice = resolveCommitMessageAgentChoice(
     preferredAgent,
     input.settings.defaultTuiAgent,
@@ -202,6 +218,9 @@ export function resolveSourceControlAiForOperation(
   }
   const hostKey = input.discoveryHostKey ?? LOCAL_COMMIT_MESSAGE_HOST_KEY
   const persistedModelId = selectPersistedModelId({
+    ...(input.operation === 'workspaceIcon' && resolvedAgent === WORKSPACE_ICON_DEFAULT_AGENT
+      ? { operationDefaultModelId: WORKSPACE_ICON_DEFAULT_MODEL }
+      : {}),
     source,
     legacy,
     repoOverrides,
@@ -265,7 +284,7 @@ export function resolveSourceControlAiActionModelDefault(
     )
   }
   const repoOverrides = { ...input.repo?.sourceControlAi?.modelOverridesByOperation }
-  if (input.operation !== 'conversationName') {
+  if (!isGlobalOnlyAiTextAction(input.operation)) {
     repoOverrides[input.operation] =
       scope === 'repo' ? withoutModelPick(repoOverrides[input.operation]) : undefined
   }
