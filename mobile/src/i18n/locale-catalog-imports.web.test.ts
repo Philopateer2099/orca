@@ -19,11 +19,13 @@ type SentRequest = {
 
 function fakeClient(initial: ConnectionState) {
   let state = initial
+  let generation = 1
   const listeners = new Set<(next: ConnectionState) => void>()
   const sent: SentRequest[] = []
   return {
     sent,
     getState: () => state,
+    getGeneration: () => generation,
     onStateChange: (listener: (next: ConnectionState) => void) => {
       listeners.add(listener)
       return () => {
@@ -36,6 +38,13 @@ function fakeClient(initial: ConnectionState) {
       state = next
       for (const listener of listeners) {
         listener(next)
+      }
+    },
+    // The shell swaps in an already-connected replacement, as on a relay-to-LAN move.
+    cutover() {
+      generation += 1
+      for (const listener of listeners) {
+        listener('connected')
       }
     }
   }
@@ -154,5 +163,27 @@ describe('the page language catalog', () => {
 
     expect(i18n.getMobileUiLocale()).toBe('ja')
     expect(i18n.translate('greeting', 'Hello')).toBe('こんにちは')
+  })
+
+  it('asks again on the connection a cutover swaps in, without waiting for another reconnect', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const client = fakeClient('reconnecting')
+    openPage(client, fakeStore({}))
+
+    await i18n.activateMobileUiLocale('ko')
+    client.moveTo('connected')
+    await settle()
+    client.cutover()
+    client.sent[0].fail(new Error('client cut over'))
+    await settle()
+    client.sent[1].reply({
+      id: 'r2',
+      ok: true,
+      result: { locale: 'ko', sha256: NEW_SHA, catalog: { greeting: '안녕하세요' } }
+    })
+    await settle()
+
+    expect(i18n.getMobileUiLocale()).toBe('ko')
+    expect(i18n.translate('greeting', 'Hello')).toBe('안녕하세요')
   })
 })

@@ -16,7 +16,10 @@ import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 export type LocaleCatalog = Readonly<Record<string, unknown>>
 type CatalogLocale = Exclude<SupportedUiLocale, 'en'>
 type HeldCatalog = { readonly sha256: string; readonly catalog: LocaleCatalog }
-type CatalogClient = Pick<BridgeRpcClient, 'getState' | 'onStateChange' | 'sendRequest'>
+type CatalogClient = Pick<
+  BridgeRpcClient,
+  'getState' | 'getGeneration' | 'onStateChange' | 'sendRequest'
+>
 type CatalogSource = { readonly client: CatalogClient; readonly store: PageDeviceStore }
 type ArrivalListener = (locale: CatalogLocale, catalog: LocaleCatalog) => void
 
@@ -42,9 +45,9 @@ let source: CatalogSource | null = null
 const held = new Map<CatalogLocale, HeldCatalog>()
 // Locales the host confirmed this page session; switching back to one asks nothing.
 const confirmed = new Set<CatalogLocale>()
-const syncs = new Map<CatalogLocale, Promise<HeldCatalog>>()
+const syncing = new Set<CatalogLocale>()
 const arrivalListeners = new Set<ArrivalListener>()
-// A relay round trip with the largest catalog fits well inside; past it the page opens in English.
+// The stored read plus a relay round trip with the largest catalog fit well inside; past it the page opens in English.
 const FIRST_PAINT_CATALOG_WAIT_MS = 3_000
 
 export function publishPageLocaleCatalogSource(next: CatalogSource): void {
@@ -94,27 +97,36 @@ function writeStoredCatalog(
   }
 }
 
-// After a failed send on a live connection, wait for the next one rather than resend at once.
-function whenConnected(client: CatalogClient, afterFailure: boolean): Promise<void> {
-  const connected = client.getState() === 'connected'
-  if (connected && !afterFailure) {
+// A send the host never answered, as opposed to a refusal or an unreadable reply.
+class CatalogSendFailed extends Error {
+  constructor(
+    message: string,
+    readonly generation: number | null = null
+  ) {
+    super(message)
+  }
+}
+
+const generationOf = (client: CatalogClient): number | null => client.getGeneration?.() ?? null
+
+// After a failed send, wait for a reconnect or a cutover to another connection, which is often connected already.
+function whenConnected(client: CatalogClient, failedGeneration: number | null): Promise<void> {
+  let reconnected = failedGeneration === null || client.getState() !== 'connected'
+  const ready = (): boolean =>
+    client.getState() === 'connected' && (reconnected || generationOf(client) !== failedGeneration)
+  if (ready()) {
     return Promise.resolve()
   }
   return new Promise((resolve) => {
-    let left = !connected
     const stop = client.onStateChange((state) => {
-      if (state !== 'connected') {
-        left = true
-      } else if (left) {
+      reconnected ||= state !== 'connected'
+      if (ready()) {
         stop()
         resolve()
       }
     })
   })
 }
-
-// A send the host never answered, as opposed to a refusal or an unreadable reply.
-class CatalogSendFailed extends Error {}
 
 // Rejects when the connection drops first, so a first paint never waits on a reply that can't come.
 function beforeConnectionLoss<T>(client: CatalogClient, work: Promise<T>): Promise<T> {
@@ -142,17 +154,15 @@ function beforeConnectionLoss<T>(client: CatalogClient, work: Promise<T>): Promi
 async function askHost(
   { client, store }: CatalogSource,
   locale: CatalogLocale,
-  known: HeldCatalog | undefined,
-  options?: { timeoutMs: number }
+  known: HeldCatalog | undefined
 ): Promise<HeldCatalog> {
-  const settled = await captureRpcOperationSettlement(
-    client,
-    localeCatalogRead,
-    { locale, ...(known ? { knownSha256: known.sha256 } : {}) },
-    options
-  )
+  const generation = generationOf(client)
+  const settled = await captureRpcOperationSettlement(client, localeCatalogRead, {
+    locale,
+    ...(known ? { knownSha256: known.sha256 } : {})
+  })
   if (settled.status === 'rejected') {
-    throw new CatalogSendFailed(`[i18n] the ${locale} catalog request got no answer`)
+    throw new CatalogSendFailed(`[i18n] the ${locale} catalog request got no answer`, generation)
   }
   const { outcome } = settled
   if (outcome.kind === 'decoded') {
@@ -176,40 +186,83 @@ async function askHost(
   )
 }
 
-// Resends on each new connection until the host answers; a refusal ends it.
+// Asks until the host answers, resending once per new connection; a refusal ends it.
 async function syncFromHost(
   current: CatalogSource,
   locale: CatalogLocale,
-  known: HeldCatalog | undefined
+  known: HeldCatalog | undefined,
+  failedGeneration: number | null
 ): Promise<HeldCatalog> {
-  for (let afterFailure = false; ; afterFailure = true) {
-    await whenConnected(current.client, afterFailure)
+  for (;;) {
+    await whenConnected(current.client, failedGeneration)
     try {
       return await askHost(current, locale, known)
     } catch (error) {
       if (!(error instanceof CatalogSendFailed)) {
         throw error
       }
+      failedGeneration = error.generation
     }
   }
 }
 
+// One sync per locale, announcing a copy other than the one the page already shows.
 function syncOnce(
   current: CatalogSource,
   locale: CatalogLocale,
-  known: HeldCatalog | undefined
-): Promise<HeldCatalog> {
-  const running = syncs.get(locale)
-  if (running) {
-    return running
+  known: HeldCatalog | undefined,
+  failedGeneration: number | null = null
+): void {
+  if (syncing.has(locale)) {
+    return
   }
-  const sync = syncFromHost(current, locale, known)
-  syncs.set(locale, sync)
-  const forget = (): void => {
-    syncs.delete(locale)
+  syncing.add(locale)
+  syncFromHost(current, locale, known, failedGeneration).then(
+    (next) => {
+      syncing.delete(locale)
+      if (next !== known) {
+        announce(locale, next.catalog)
+      }
+    },
+    () => {
+      syncing.delete(locale)
+    }
+  )
+}
+
+// What a first paint may wait for: the stored copy, else one request while connected.
+async function firstCatalog(current: CatalogSource, locale: CatalogLocale): Promise<HeldCatalog> {
+  const known = held.get(locale) ?? (await readStoredCatalog(current.store, locale))
+  if (known) {
+    held.set(locale, known)
+    if (!confirmed.has(locale)) {
+      // Show the stored copy now; a newer one replaces it when the host answers.
+      syncOnce(current, locale, known)
+    }
+    return known
   }
-  sync.then(forget, forget)
-  return sync
+  if (current.client.getState() !== 'connected') {
+    throw new CatalogSendFailed('[i18n] no connection for the catalog yet')
+  }
+  return beforeConnectionLoss(current.client, askHost(current, locale, undefined))
+}
+
+function withinFirstPaintWait<T>(work: Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('[i18n] the catalog took too long for the first paint'))
+    }, FIRST_PAINT_CATALOG_WAIT_MS)
+    work.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error: unknown) => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
 }
 
 // Same contract as the bundled imports: resolve the catalog or reject so activation falls back to English.
@@ -218,39 +271,21 @@ export async function importLocaleCatalog(locale: CatalogLocale): Promise<Locale
   if (current === null) {
     throw new Error('[i18n] no catalog source outside a shell page')
   }
-  const known = held.get(locale) ?? (await readStoredCatalog(current.store, locale)) ?? undefined
-  if (known) {
-    held.set(locale, known)
-    if (!confirmed.has(locale)) {
-      // Show the stored copy now; a newer one replaces it when the host answers.
-      void syncOnce(current, locale, known).then(
-        (next) => {
-          if (next !== known) {
-            announce(locale, next.catalog)
-          }
-        },
-        () => undefined
-      )
-    }
-    return known.catalog
-  }
-  if (current.client.getState() === 'connected') {
-    try {
-      // One bounded attempt: the first paint waits on it, never on the retries behind it.
-      const first = askHost(current, locale, undefined, { timeoutMs: FIRST_PAINT_CATALOG_WAIT_MS })
-      return (await beforeConnectionLoss(current.client, first)).catalog
-    } catch (error) {
-      if (!(error instanceof CatalogSendFailed)) {
-        throw error
+  const first = firstCatalog(current, locale)
+  try {
+    return (await withinFirstPaintWait(first)).catalog
+  } catch (error) {
+    // Activation shows English meanwhile; whatever comes later switches the page in place.
+    first.then(
+      (late) => {
+        announce(locale, late.catalog)
+      },
+      (failure: unknown) => {
+        if (failure instanceof CatalogSendFailed) {
+          syncOnce(current, locale, undefined, failure.generation)
+        }
       }
-    }
+    )
+    throw error
   }
-  // Activation shows English meanwhile; the sync announces the catalog when the host answers.
-  void syncOnce(current, locale, undefined).then(
-    (next) => {
-      announce(locale, next.catalog)
-    },
-    () => undefined
-  )
-  throw new Error(`[i18n] no ${locale} catalog on this phone yet`)
 }
