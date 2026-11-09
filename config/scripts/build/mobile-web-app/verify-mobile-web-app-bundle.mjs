@@ -21,6 +21,9 @@ const manifestContract = join(
 )
 
 // Derive asset ceiling as chunks+images+document so chunk overflow reports splitting cause before generic count; flat ceiling drifts as routes grow.
+// The host sends a language catalog in one reply, which must fit a 1 MiB relay frame once encrypted.
+export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 384 * 1024
+
 export function mobileWebAppBundleMaxAssets(routeCount, imageCount) {
   return mobileWebAppBundleMaxChunks(routeCount) + imageCount + 1
 }
@@ -172,6 +175,15 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   }
   if (catalogsOf(first.manifest) !== catalogsOf(manifest)) {
     fail(`${bundleDir} is stale: its language catalogs differ from a fresh build's`)
+  }
+  const oversized = (manifest.catalogs ?? []).find(
+    (catalog) => catalog.byteLength > MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES
+  )
+  if (oversized) {
+    fail(
+      `the ${oversized.locale} catalog is ${String(oversized.byteLength)} bytes, over the ` +
+        `${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES)} one host reply carries`
+    )
   }
   const budgetBytes = mobileWebAppBundleBudgetBytes(manifest)
   if (budgetBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {

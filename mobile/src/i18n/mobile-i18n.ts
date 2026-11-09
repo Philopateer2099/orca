@@ -118,13 +118,13 @@ export async function activateMobileUiLocale(locale: SupportedUiLocale): Promise
 }
 
 // Switch in place, without a reload: a newer copy replaces the shown one, a first copy replaces the English fallback.
+// Install it even when another language is up now, so switching back shows the newer copy.
 onLocaleCatalogArrival((locale, catalog) => {
-  if (locale !== requestedLocale) {
-    return
-  }
   mobileI18n.removeResourceBundle(locale, 'translation')
   mobileI18n.addResourceBundle(locale, 'translation', catalog, false, true, { skipCopy: true })
-  void activateMobileUiLocale(locale)
+  if (locale === requestedLocale) {
+    void activateMobileUiLocale(locale)
+  }
 })
 
 // Development-only layout check: accents and pads every string so clipping shows on device.

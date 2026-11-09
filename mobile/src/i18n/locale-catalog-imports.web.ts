@@ -44,6 +44,8 @@ const held = new Map<CatalogLocale, HeldCatalog>()
 const confirmed = new Set<CatalogLocale>()
 const syncs = new Map<CatalogLocale, Promise<HeldCatalog>>()
 const arrivalListeners = new Set<ArrivalListener>()
+// A relay round trip with the largest catalog fits well inside; past it the page opens in English.
+const FIRST_PAINT_CATALOG_WAIT_MS = 3_000
 
 export function publishPageLocaleCatalogSource(next: CatalogSource): void {
   source = next
@@ -111,13 +113,16 @@ function whenConnected(client: CatalogClient, afterFailure: boolean): Promise<vo
   })
 }
 
+// A send the host never answered, as opposed to a refusal or an unreadable reply.
+class CatalogSendFailed extends Error {}
+
 // Rejects when the connection drops first, so a first paint never waits on a reply that can't come.
 function beforeConnectionLoss<T>(client: CatalogClient, work: Promise<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     const stop = client.onStateChange((state) => {
       if (state !== 'connected') {
         stop()
-        reject(new Error('[i18n] connection lost before the catalog arrived'))
+        reject(new CatalogSendFailed('[i18n] connection lost before the catalog arrived'))
       }
     })
     work.then(
@@ -133,39 +138,59 @@ function beforeConnectionLoss<T>(client: CatalogClient, work: Promise<T>): Promi
   })
 }
 
-// Retries a failed send on the next connection; a refusal or an unreadable reply ends the sync.
-async function syncFromHost(
+// One request. On an answer the copy becomes the page's and the store's.
+async function askHost(
   { client, store }: CatalogSource,
+  locale: CatalogLocale,
+  known: HeldCatalog | undefined,
+  options?: { timeoutMs: number }
+): Promise<HeldCatalog> {
+  const settled = await captureRpcOperationSettlement(
+    client,
+    localeCatalogRead,
+    { locale, ...(known ? { knownSha256: known.sha256 } : {}) },
+    options
+  )
+  if (settled.status === 'rejected') {
+    throw new CatalogSendFailed(`[i18n] the ${locale} catalog request got no answer`)
+  }
+  const { outcome } = settled
+  if (outcome.kind === 'decoded') {
+    const { sha256, catalog } = outcome.value
+    // A null catalog only confirms the copy the phone named.
+    const next = catalog !== null ? { sha256, catalog } : known?.sha256 === sha256 ? known : null
+    if (next) {
+      if (next !== known) {
+        writeStoredCatalog(store, locale, next)
+      }
+      held.set(locale, next)
+      confirmed.add(locale)
+      return next
+    }
+  }
+  const refusal = outcome.kind === 'outer-refused' ? outcome.error : undefined
+  throw new Error(
+    isMobileMethodUnavailableError(refusal?.code, refusal?.message)
+      ? '[i18n] this desktop serves no language catalogs'
+      : `[i18n] the desktop answered no ${locale} catalog`
+  )
+}
+
+// Resends on each new connection until the host answers; a refusal ends it.
+async function syncFromHost(
+  current: CatalogSource,
   locale: CatalogLocale,
   known: HeldCatalog | undefined
 ): Promise<HeldCatalog> {
   for (let afterFailure = false; ; afterFailure = true) {
-    await whenConnected(client, afterFailure)
-    const settled = await captureRpcOperationSettlement(client, localeCatalogRead, {
-      locale,
-      ...(known ? { knownSha256: known.sha256 } : {})
-    })
-    if (settled.status === 'rejected') {
-      continue
-    }
-    const { outcome } = settled
-    if (outcome.kind === 'decoded') {
-      const { sha256, catalog } = outcome.value
-      if (catalog === null && known?.sha256 === sha256) {
-        return known
-      }
-      if (catalog !== null) {
-        const next = { sha256, catalog }
-        writeStoredCatalog(store, locale, next)
-        return next
+    await whenConnected(current.client, afterFailure)
+    try {
+      return await askHost(current, locale, known)
+    } catch (error) {
+      if (!(error instanceof CatalogSendFailed)) {
+        throw error
       }
     }
-    const refusal = outcome.kind === 'outer-refused' ? outcome.error : undefined
-    throw new Error(
-      isMobileMethodUnavailableError(refusal?.code, refusal?.message)
-        ? '[i18n] this desktop serves no language catalogs'
-        : `[i18n] the desktop answered no ${locale} catalog`
-    )
   }
 }
 
@@ -178,11 +203,7 @@ function syncOnce(
   if (running) {
     return running
   }
-  const sync = syncFromHost(current, locale, known).then((next) => {
-    held.set(locale, next)
-    confirmed.add(locale)
-    return next
-  })
+  const sync = syncFromHost(current, locale, known)
   syncs.set(locale, sync)
   const forget = (): void => {
     syncs.delete(locale)
@@ -213,15 +234,19 @@ export async function importLocaleCatalog(locale: CatalogLocale): Promise<Locale
     }
     return known.catalog
   }
-  const sync = syncOnce(current, locale, undefined)
   if (current.client.getState() === 'connected') {
     try {
-      return (await beforeConnectionLoss(current.client, sync)).catalog
-    } catch {
-      // Fall through: activation shows English and the sync announces the catalog later.
+      // One bounded attempt: the first paint waits on it, never on the retries behind it.
+      const first = askHost(current, locale, undefined, { timeoutMs: FIRST_PAINT_CATALOG_WAIT_MS })
+      return (await beforeConnectionLoss(current.client, first)).catalog
+    } catch (error) {
+      if (!(error instanceof CatalogSendFailed)) {
+        throw error
+      }
     }
   }
-  void sync.then(
+  // Activation shows English meanwhile; the sync announces the catalog when the host answers.
+  void syncOnce(current, locale, undefined).then(
     (next) => {
       announce(locale, next.catalog)
     },

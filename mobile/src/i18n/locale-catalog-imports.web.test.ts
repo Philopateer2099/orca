@@ -10,7 +10,12 @@ vi.mock('./locale-catalog-imports', () => import('./locale-catalog-imports.web')
 const OLD_SHA = 'a'.repeat(64)
 const NEW_SHA = 'b'.repeat(64)
 
-type SentRequest = { method: string; params: unknown; reply: (response: RpcResponse) => void }
+type SentRequest = {
+  method: string
+  params: unknown
+  reply: (response: RpcResponse) => void
+  fail: (error: Error) => void
+}
 
 function fakeClient(initial: ConnectionState) {
   let state = initial
@@ -26,7 +31,7 @@ function fakeClient(initial: ConnectionState) {
       }
     },
     sendRequest: (method: string, params?: unknown) =>
-      new Promise<RpcResponse>((reply) => sent.push({ method, params, reply })),
+      new Promise<RpcResponse>((reply, fail) => sent.push({ method, params, reply, fail })),
     moveTo(next: ConnectionState) {
       state = next
       for (const listener of listeners) {
@@ -124,5 +129,30 @@ describe('the page language catalog', () => {
 
     expect(i18n.getMobileUiLocale()).toBe('fr')
     expect(i18n.translate('greeting', 'Hello')).toBe('Bonjour')
+  })
+
+  it('opens in English when the first request fails on a live link, then switches on the next connection', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const client = fakeClient('connected')
+    openPage(client, fakeStore({}))
+
+    const activation = i18n.activateMobileUiLocale('ja')
+    await settle()
+    client.sent[0].fail(new Error('timed out'))
+    await activation
+    expect(i18n.getMobileUiLocale()).toBe('en')
+
+    client.moveTo('reconnecting')
+    client.moveTo('connected')
+    await settle()
+    client.sent[1].reply({
+      id: 'r2',
+      ok: true,
+      result: { locale: 'ja', sha256: NEW_SHA, catalog: { greeting: 'こんにちは' } }
+    })
+    await settle()
+
+    expect(i18n.getMobileUiLocale()).toBe('ja')
+    expect(i18n.translate('greeting', 'Hello')).toBe('こんにちは')
   })
 })
