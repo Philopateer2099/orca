@@ -3616,7 +3616,7 @@
             "notRead": "Uso desconhecido: ainda não consultado"
           },
           "InlineUsageBars": {
-            "resetsAt": "Redefinição em {{when}}"
+            "resetsAt": "Redefinição: {{when}}"
           }
         }
       },
